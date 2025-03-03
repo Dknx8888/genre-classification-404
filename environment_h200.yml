@@ -1,0 +1,16 @@
+name: CSE404_h200
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pandas
+  - numpy
+  - seaborn
+  - matplotlib
+  - scikit-learn
+  - pip
+  - pip:
+    - --index-url https://download.pytorch.org/whl/cu126
+    - torch
+    - torchvision
+    - torchaudio
