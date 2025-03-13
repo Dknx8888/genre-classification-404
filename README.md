@@ -1,7 +1,6 @@
 # genre-classification-404
 
-Create conda environment (in h200 HPCC) with
-`conda env create -f environment_h200.yml`
+Configure the file to use whether GPU or CPU before adding environment
 
-else
+Create conda environment with
 `conda env create -f environment.yml`
