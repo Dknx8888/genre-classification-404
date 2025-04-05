@@ -34,20 +34,20 @@ def preprocess_none(X):
     return X_scaled, scaler
 
 def preprocess_lasso(X, y_numeric):
-    """Apply LASSO for feature selection, expecting numeric y."""
+    """Apply LASSO for feature selection"""
     # Ensure X is a DataFrame for feature names
     if isinstance(X, np.ndarray):
         X = pd.DataFrame(X, columns=music_numeric.drop(columns=['terms']).columns)
     
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    lasso = Lasso(alpha=0.01)  # Tune alpha as needed
-    selector = SelectFromModel(lasso, prefit=False)
-    X_selected = selector.fit_transform(X_scaled, y_numeric)
+    lasso = Lasso(alpha=0.01) 
+    selecter = SelectFromModel(lasso, prefit=False)
+    X_selected = selecter.fit_transform(X_scaled, y_numeric)
     
     # Get original and selected feature names
     original_features = X.columns.tolist()
-    selected_features = X.columns[selector.get_support()].tolist()
+    selected_features = X.columns[selecter.get_support()].tolist()
     return X_selected, scaler, original_features, selected_features
 
 def preprocess_pca(X, n_components=None):
@@ -98,8 +98,7 @@ class_configs = ['All', 'Top100', 'Top75', 'Top50']
 preprocessing_methods = ['None', 'LASSO', 'PCA', 'CovMatrix']
 year_methods = ['median', 'neg1']
 
-# Create a label encoder for terms (string to numeric)
-le = LabelEncoder()
+lbe = LabelEncoder()
 
 # Initialize results list
 results = []
@@ -109,13 +108,13 @@ if not os.path.exists(args.output_path):
     pd.DataFrame([{
         'Method': 'LogisticRegression',
         'Pre-processing': '',
-        'Num of classes': '',
-        'Year handling': '',
+        'classes num': '',
+        'Year': '',
         'Accuracy': '',
-        'F1-score': ''
+        'F1': ''
     }]).to_csv(args.output_path, index=False, sep='\t')
 
-# Loop through all combinations
+
 for num_classes in class_configs:
     # Filter dataset based on number of classes
     if num_classes == 'All':
@@ -128,20 +127,18 @@ for num_classes in class_configs:
     print(f"\nProcessing {num_classes} classes, {music.shape[0]} samples")
 
     for year_method in year_methods:
-        # Handle year
         music_processed = handle_year(music.copy(), year_method)
         
         # Features and target
         X = music_processed.drop(columns=['terms'])
         y = music_processed['terms']
 
-        # Encode y to numeric for LASSO and logistic regression
-        y_encoded = le.fit_transform(y)  # Fit on full y, transform for train/test
+        y_encoded = lbe.fit_transform(y) 
 
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=40)
-        y_train_encoded = le.transform(y_train)  # Transform train/test labels
-        y_test_encoded = le.transform(y_test)
+        y_train_encoded = lbe.transform(y_train)
+        y_test_encoded = lbe.transform(y_test)
         
         for pre_method in preprocessing_methods:
             print(f"  Year: {year_method}, Preprocessing: {pre_method}")
@@ -172,51 +169,32 @@ for num_classes in class_configs:
                 X_test_processed = X_test_scaled[:, [original_features.index(feat) for feat in selected_features]]
                 y_use = y_train_encoded
 
-            # Train logistic regression
-            try:
-                log_reg = LogisticRegression(random_state=0, max_iter=1000, multi_class='multinomial')
-                log_reg.fit(X_processed, y_use)
+            
+            log_reg = LogisticRegression(random_state=0, max_iter=1000, multi_class='multinomial')
+            log_reg.fit(X_processed, y_use)
 
-                # Predict and evaluate (use encoded for prediction, decode for metrics)
-                y_pred_encoded = log_reg.predict(X_test_processed)
-                y_pred = le.inverse_transform(y_pred_encoded)  # Decode back to original labels
-                accuracy = accuracy_score(y_test, y_pred)
-                f1 = f1_score(y_test, y_pred, average='weighted')  # Use original labels for F1
+            # Predict and evaluate (use encoded for prediction, decode for metrics)
+            y_pred_encoded = log_reg.predict(X_test_processed)
+            y_pred = lbe.inverse_transform(y_pred_encoded)  # Decode back to original labels
+            accuracy = accuracy_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred, average='weighted')  # Use original labels for F1
 
-                # Store and save results immediately
-                result = {
-                    'Method': 'LogisticRegression',
-                    'Pre-processing': pre_method,
-                    'Num of classes': num_classes,
-                    'Year handling': year_method,
-                    'Accuracy': accuracy,
-                    'F1-score': f1
-                }
-                results.append(result)
-                # Append to CSV with tab delimiter without duplicating header
-                temp_df = pd.DataFrame([result])
-                if os.path.getsize(args.output_path) == 0:  # If file is empty, write header
-                    temp_df.to_csv(args.output_path, index=False, sep='\t')
-                else:  # Otherwise, append without header
-                    temp_df.to_csv(args.output_path, mode='a', header=False, index=False, sep='\t')
-                print(f"    Accuracy: {accuracy:.4f}, F1-score: {f1:.4f}")
-            except Exception as e:
-                print(f"    Error: {e}")
-                # Store and save error result
-                error_result = {
-                    'Method': 'LogisticRegression',
-                    'Pre-processing': pre_method,
-                    'Num of classes': num_classes,
-                    'Year handling': year_method,
-                    'Accuracy': None,
-                    'F1-score': None
-                }
-                results.append(error_result)
-                temp_df = pd.DataFrame([error_result])
-                if os.path.getsize(args.output_path) == 0:  # If file is empty, write header
-                    temp_df.to_csv(args.output_path, index=False, sep='\t')
-                else:  # Otherwise, append without header
-                    temp_df.to_csv(args.output_path, mode='a', header=False, index=False, sep='\t')
+            # Store and save results immediately
+            result = {
+                'Method': 'LogisticRegression',
+                'Pre-processing': pre_method,
+                'classes num': num_classes,
+                'Year': year_method,
+                'Accuracy': accuracy,
+                'F1': f1
+            }
+            results.append(result)
+            # Append to CSV with tab delimiter without duplicating header
+            temp_df = pd.DataFrame([result])
+            if os.path.getsize(args.output_path) == 0:  # If file is empty, write header
+                temp_df.to_csv(args.output_path, index=False, sep='\t')
+            else:  # Otherwise, append without header
+                temp_df.to_csv(args.output_path, mode='a', header=False, index=False, sep='\t')
+            print(f"    Accuracy: {accuracy:.4f}, F1: {f1:.4f}")
 
-# No final save needed since we save after each experiment
 print(f"\nResults are being saved incrementally to {args.output_path}")
